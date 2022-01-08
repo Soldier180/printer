@@ -33,8 +33,19 @@ class GUI(Ui_Form, QtWidgets.QWidget):
     pix_border_h = 10
     pix_border_w = 10
     kernel = np.ones((dilate_kernel, dilate_kernel), 'uint8')
+    work_zone = (config['work_zone'][0], config['work_zone'][1], config['work_zone'][2], config['work_zone'][3])
 
     def init_start_values(self):
+        thresh_img = np.zeros((480,640 ))
+        image = QtGui.QImage(thresh_img, thresh_img.shape[1], thresh_img.shape[0], QtGui.QImage.Format_Grayscale8)
+        pixmap = QPixmap(image)
+        self.lb_frames.setPixmap(pixmap)
+
+
+
+        self.rubberBand = QRubberBand(QRubberBand.Rectangle, self)
+        self.work_zone = (0,0,640,480)
+        self.origin = QPoint()
         self.sb_kernel.setValue(self.dilate_kernel)
         if self.dilate_enable:
             self.cb_dilate.setChecked(True)
@@ -56,6 +67,32 @@ class GUI(Ui_Form, QtWidgets.QWidget):
         self.sb_kernel.valueChanged.connect(self.kernel_change, type=connect_type)
         self.sb_max_d.valueChanged.connect(self.change_min_max_dist, type=connect_type)
         self.sb_min_d.valueChanged.connect(self.change_min_max_dist, type=connect_type)
+        self.frame_label_position = self.lb_frames.pos()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton and self.cb_work_region.isChecked():
+            self.origin = QPoint(event.pos())
+            self.rubberBand.setGeometry(QRect(self.origin, QSize()))
+            self.rubberBand.show()
+
+    def mouseMoveEvent(self, event):
+        if not self.origin.isNull() and self.cb_work_region.isChecked():
+            self.rubberBand.setGeometry(QRect(self.origin, event.pos()).normalized())
+
+    def mouseReleaseEvent(self, event):
+
+        if event.button() == Qt.LeftButton and not self.origin.isNull() and self.cb_work_region.isChecked():
+            print("start ",  self.origin, " end ",QPoint(event.pos()))
+            xmin = self.frame_label_position.x()
+            xmax = self.frame_label_position.x() + 640
+            ymin = self.frame_label_position.y()
+            ymax = self.frame_label_position.y() + 480
+            if (self.origin.x() >= xmin and self.origin.x() <= xmax) and (event.pos().x() >= xmin and event.pos().x() <= xmax) and (self.origin.y() >= ymin and self.origin.y() <= ymax) and (event.pos().y() >= ymin and event.pos().y() <= ymax) :
+                self.work_zone = (self.origin.x()-xmin, self.origin.y()-ymin, event.pos().x()-xmin, event.pos().y()-ymin)
+                self.config['work_zone'] = [self.work_zone[0], self.work_zone[1], self.work_zone[2], self.work_zone[3]]
+                if self.th_rand is not None:
+                    self.th_rand.work_zone = self.work_zone
+            self.rubberBand.hide()
 
 
     def change_min_max_dist(self):
@@ -142,13 +179,23 @@ class ThreadStreamsCurrentValue(Thread, QtCore.QObject):
         self.pipeline.start(self.config)
         self.pix_border_w = 10
         self.pix_border_h = 10
+        self.work_zone = (params['work_zone'][0], params['work_zone'][1], params['work_zone'][2], params['work_zone'][3])
         self.cam_h = params['camera']['y']
         self.cam_w = params['camera']['x']
+        self.area_screen = self.cam_h * self.cam_w
         self.max_dist = params['distance']['max']
         self.min_dist = params['distance']['min']
         self.dilate_enable = params['dilate']['enable']
         self.kernel_size = params['dilate']['kernel']
         self.kernel = np.ones((self.kernel_size, self.kernel_size), 'uint8')
+        if self.cam_w == 640:
+            self.fov_x_2 = np.tan(np.radians(78.5 / 2))
+            self.fov_y_2 = np.tan(np.radians(64 / 2))
+        else:
+            self.fov_x_2 = np.tan(np.radians(87/ 2))
+            self.fov_y_2 = np.tan(np.radians(658/ 2))
+        self.img_w_2 = self.cam_w / 2
+        self.img_h_2 = self.cam_h / 2
 
 
     def stop(self):
@@ -161,8 +208,6 @@ class ThreadStreamsCurrentValue(Thread, QtCore.QObject):
         return self._stop.isSet()
 
     def run(self):
-
-
         while True:
 
             try:
@@ -170,7 +215,10 @@ class ThreadStreamsCurrentValue(Thread, QtCore.QObject):
                 depth = frames.get_depth_frame()
                 if not depth: continue
 
-                depth1 = np.asanyarray(depth.get_data()) / 1000.0  # distance in meters
+                depth2 = np.asanyarray(depth.get_data()) / 1000.0  # distance in meters
+                depth1 = np.zeros((self.cam_h, self.cam_w))
+                depth1[self.work_zone[1]:self.work_zone[3], self.work_zone[0]:self.work_zone[2]] = depth2[self.work_zone[1]:self.work_zone[3], self.work_zone[0]:self.work_zone[2]]
+                original_copy = copy.deepcopy(depth1)
 
                 if depth1.shape[0] != 480:
                     depth1 = cv2.resize(depth1, (640, 480))
@@ -186,6 +234,77 @@ class ThreadStreamsCurrentValue(Thread, QtCore.QObject):
                 thresh_img = thresh_img.astype(np.uint8)
                 if self.dilate_enable:
                     thresh_img = cv2.dilate(thresh_img, self.kernel, iterations=1)
+
+                contours, hierarchy = cv2.findContours(thresh_img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+                cnt_sorted = sorted(contours, key=len, reverse=True)
+                cnt = cnt_sorted[0]
+                area = cv2.contourArea(cnt)
+                image_copy = np.zeros((self.cam_h, self.cam_w))
+                if self.area_screen * 0.3 < area:
+                    if len(cnt_sorted) > 1:
+                        cnt = sorted(contours, key=len, reverse=True)[1]
+                    else:
+                        cnt = None
+                if cnt is not None:
+
+                    rbox = cv2.minAreaRect(cnt)
+                    # print(rbox)
+                    pts = cv2.boxPoints(rbox).astype(np.int32)
+                    # print(pts)
+
+                    cv2.drawContours(image_copy, [pts], -1, 255, -1)
+
+                    w_i, h_i = abs(rbox[1][0]), abs(rbox[1][1])
+                    w = np.max((w_i, h_i))
+                    h = np.min((w_i, h_i))
+                    # print((w,h))
+
+                    #cv2.imshow('box', image_copy)
+
+                    A = np.argwhere(image_copy >= 255)
+                    res = np.array([original_copy[v[0], v[1]] for v in A])
+                    res[res <= 0.1] = np.nan
+                    dist = np.nanmean(res)
+
+                    # pix_per_mm = w/(w_obj * dist)
+
+                    px_mm_x = (dist * 1000 * self.fov_x_2) / self.img_w_2
+                    px_mm_y = (dist * 1000 * self.fov_y_2) / self.img_h_2
+                    delta_x = pts[2][0] - pts[1][0]
+                    delta_y = pts[2][1] - pts[1][1]
+
+                    delta_x_mm = delta_x * px_mm_x
+                    delta_y_mm = delta_y * px_mm_y
+                    print(delta_x, delta_y)
+
+                    wwww = np.sqrt((delta_x_mm ** 2 + delta_y_mm ** 2))
+                    print(wwww)
+
+                    # print(dist, " pix mm  ", pix_per_mm / dist, " x ", px_mm_x * w, " y ", px_mm_y * h)
+                    # print("pix per mm x ",px_mm_x, " pix per mm y ", px_mm_y)
+                    print(dist, " x ", px_mm_x * w, " y ", px_mm_y * h)
+
+
+                    for p in range(len(pts)):
+                        font = cv2.FONT_HERSHEY_SIMPLEX
+                        org = (pts[p][0], pts[p][1])
+                        fontScale = 1
+                        color = 0
+                        thickness = 3
+                        thresh_img = cv2.putText(thresh_img, str(p), org, font,
+                                             fontScale, color, thickness, cv2.LINE_AA)
+
+                    thresh_img = cv2.drawContours(thresh_img, [pts], -1, (0, 255, 0), 1, cv2.LINE_AA)
+
+                    work_r_points = [np.array(([self.work_zone[0], self.work_zone[1]],
+                              [self.work_zone[2], self.work_zone[1]],
+                              [self.work_zone[2], self.work_zone[3]],
+                              [self.work_zone[0], self.work_zone[3]]
+                              ))]
+                    thresh_img = cv2.drawContours(thresh_img, work_r_points,
+                                                  -1, (0, 255, 0), 1, cv2.LINE_AA)
+
+
 
 
 
@@ -206,4 +325,6 @@ if __name__ == "__main__":
     ui.setupUi(ui)
     ui.init_start_values()
     ui.show()
+    ui.frame_label_position = ui.lb_frames.pos()
+    print(ui.frame_label_position)
     sys.exit(app.exec_())
