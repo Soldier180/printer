@@ -1,32 +1,14 @@
-import socket
+#file:server.py
+from json_cl_server import Server
 
-HOST = '127.0.0.1'  # The server's hostname or IP address
-PORT = 5556         # The port used by the server
-BUFFER_SIZE = 1
+host = 'LOCALHOST'
+port = 5556
 
-def server_socket():
-    data = []
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.bind((HOST,PORT))
-        s.listen()
-        while 1: # Accept connections from multiple clients
-            print('Listening for client...')
-            conn, addr = s.accept()
-            print('Connection address:', addr)
-            while 1: # Accept multiple messages from each client
-                buffer = conn.recv(BUFFER_SIZE)
-                buffer = buffer.decode()
-                if buffer == ";":
-                    conn.close()
-                    print("Received all the data")
-                    for x in data:
-                        print(x)
-                    break
-                elif buffer:
-                    print("received data: ", buffer)
-                    data.append(buffer)
-                else:
-                    break
+server = Server(host, port)
 
-server_socket()
+while True:
+    server.accept()
+    data = server.recv()
+    server.send({"response":data})
+
+server.close()
