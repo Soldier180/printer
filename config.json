@@ -1,1 +1,1 @@
-{"camera": {"x": 640, "y": 480, "fps": 90}, "distance": {"min": 0.25, "max": 0.283}, "dilate": {"enable": 0, "kernel": 3}, "stream_config": "", "camera_angles": {"640": {"hor": 78.5, "ver": 64}, "1280": {"hor": 87, "ver": 58}}, "work_zone": [160, 82, 511, 388]}
+{"camera": {"x": 640, "y": 480, "fps": 90}, "distance": {"min": 0.25, "max": 0.283}, "dilate": {"enable": 1, "kernel": 3}, "stream_config": "", "camera_angles": {"640": {"hor": 78.5, "ver": 64}, "1280": {"hor": 87, "ver": 58}}, "work_zone": [160, 82, 511, 388]}
