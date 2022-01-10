@@ -1,16 +1,30 @@
-#file:client.py
-from json_cl_server import Client
-import time
+import socket
+import sys
 
-host = '172.16.234.76'
-port = 5556
+# Create a TCP/IP socket
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-i=1
-while True:
-    client = Client()
-    client.connect(host, port).send({'test':i})
-    i+=1
-    response = client.recv()
-    print(response)
-    client.close()
-    time.sleep(1)
+# Connect the socket to the port where the server is listening
+server_address = ('localhost', 10000)
+print('connecting to {} port {}'.format(*server_address))
+sock.connect(server_address)
+
+try:
+
+    # Send data
+    message = b'This is the message.  It will be repeated.'
+    print('sending {!r}'.format(message))
+    sock.sendall(message)
+
+    # Look for the response
+    amount_received = 0
+    amount_expected = len(message)
+
+    while amount_received < amount_expected:
+        data = sock.recv(16)
+        amount_received += len(data)
+        print('received {!r}'.format(data))
+
+finally:
+    print('closing socket')
+    sock.close()

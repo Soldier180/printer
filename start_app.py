@@ -11,6 +11,7 @@ from threading import Thread, Event
 import time
 import numpy as np
 import json
+from kalman import KalmanFilter
 
 def get_coords(x, y, angle, imwidth, imheight):
 
@@ -185,6 +186,8 @@ class ThreadStreamsCurrentValue(Thread, QtCore.QObject):
         Thread.__init__(self, parent)
         QtCore.QObject.__init__(self, parent)
         self._stop = Event()
+        self.kalman = KalmanFilter(initial_estimate = 50.0, initial_est_error = 1.0,initial_measure_error = 1.0)
+
 
         self.pipeline = rs.pipeline()
         # Configure streams
@@ -284,6 +287,12 @@ class ThreadStreamsCurrentValue(Thread, QtCore.QObject):
                         thresh_img = cv2.line(thresh_img, (x1_0, y1_0), (x2_0, y2_0), (255, 255, 255), ln_w)
                         image_copy = cv2.line(image_copy, (x1_0, y1_0), (x2_0, y2_0), 0, ln_w)
 
+                        w = rbox[1][0]
+                        h = rbox[1][1]
+
+                        delta_x = pts[1][0] - pts[0][0]
+                        delta_y = pts[0][1] - pts[1][1]
+
 
 
                         #print("w ",int(rbox[1][0]) ," h ", int(rbox[1][1]), "angle ", int(180-rbox[2]), "  ", angle2)
@@ -304,57 +313,82 @@ class ThreadStreamsCurrentValue(Thread, QtCore.QObject):
                         thresh_img = cv2.line(thresh_img, (x1_0, y1_0), (x2_0, y2_0), 255, ln_w)
                         image_copy = cv2.line(image_copy, (x1_0, y1_0), (x2_0, y2_0), 0, ln_w)
 
+                        w = rbox[1][1]
+                        h = rbox[1][0]
+
+                        delta_x = pts[2][0] - pts[1][0]
+                        delta_y = pts[2][1] - pts[1][1]
+
                         #print("w ",int(rbox[1][0]) ," h ", int(rbox[1][1]), "angle ",int(90-rbox[2]))
-
-
-
-
-                    w_i, h_i = abs(rbox[1][0]), abs(rbox[1][1])
-                    w = np.max((w_i, h_i))
-                    h = np.min((w_i, h_i))
-                    # print((w,h))
-
-                    cv2.imshow('box', image_copy)
-                    cv2.waitKey(1)
 
                     A = np.argwhere(image_copy >= 255)
                     res = np.array([original_copy[v[0], v[1]] for v in A])
                     res[res <= 0.1] = np.nan
                     dist = np.nanmean(res)
-
-                    # pix_per_mm = w/(w_obj * dist)
-
                     px_mm_x = (dist * 1000 * self.fov_x_2) / self.img_w_2
                     px_mm_y = (dist * 1000 * self.fov_y_2) / self.img_h_2
-                    delta_x = pts[2][0] - pts[1][0]
-                    delta_y = pts[2][1] - pts[1][1]
 
                     delta_x_mm = delta_x * px_mm_x
                     delta_y_mm = delta_y * px_mm_y
-                    #print(delta_x, delta_y)
+                    res = np.sqrt((delta_x_mm ** 2 + delta_y_mm ** 2))
+                    self.kalman.iterative_updates(res)
 
-                    wwww = np.sqrt((delta_x_mm ** 2 + delta_y_mm ** 2))
+                    print("width ", self.kalman.estimate)
+
+
+
+
+
+
+
+                    # w_i, h_i = abs(rbox[1][0]), abs(rbox[1][1])
+                    # w = np.max((w_i, h_i))
+                    # h = np.min((w_i, h_i))
+                    # # print((w,h))
+                    #
+                    # cv2.imshow('box', image_copy)
+                    # cv2.waitKey(1)
+                    #
+                    # A = np.argwhere(image_copy >= 255)
+                    # res = np.array([original_copy[v[0], v[1]] for v in A])
+                    # res[res <= 0.1] = np.nan
+                    # dist = np.nanmean(res)
+                    #
+                    # # pix_per_mm = w/(w_obj * dist)
+                    #
+                    # px_mm_x = (dist * 1000 * self.fov_x_2) / self.img_w_2
+                    # px_mm_y = (dist * 1000 * self.fov_y_2) / self.img_h_2
+                    # delta_x = pts[2][0] - pts[1][0]
+                    # delta_y = pts[2][1] - pts[1][1]
+                    #
+                    # delta_x_mm = delta_x * px_mm_x
+                    # delta_y_mm = delta_y * px_mm_y
+                    # #print(delta_x, delta_y)
+                    #
+                    # wwww = np.sqrt((delta_x_mm ** 2 + delta_y_mm ** 2))
                     #print(wwww)
 
                     # print(dist, " pix mm  ", pix_per_mm / dist, " x ", px_mm_x * w, " y ", px_mm_y * h)
                     # print("pix per mm x ",px_mm_x, " pix per mm y ", px_mm_y)
                     #print(dist, " x ", px_mm_x * w, " y ", px_mm_y * h)
-                    font = cv2.FONT_HERSHEY_SIMPLEX
-                    org = (int(rbox[0][0]), int(rbox[0][1]))
-                    fontScale = 1
-                    color = 255
-                    thickness = 3
-                    thresh_img = cv2.putText(thresh_img, "C", org, font,
-                                             fontScale, color, thickness, cv2.LINE_AA)
 
-                    # for p in range(len(pts)):
-                    #     font = cv2.FONT_HERSHEY_SIMPLEX
-                    #     org = (pts[p][0], pts[p][1])
-                    #     fontScale = 1
-                    #     color = 0
-                    #     thickness = 3
-                    #     thresh_img = cv2.putText(thresh_img, str(p), org, font,
+
+                    # font = cv2.FONT_HERSHEY_SIMPLEX
+                    # org = (int(rbox[0][0]), int(rbox[0][1]))
+                    # fontScale = 1
+                    # color = 255
+                    # thickness = 3
+                    # thresh_img = cv2.putText(thresh_img, "C", org, font,
                     #                          fontScale, color, thickness, cv2.LINE_AA)
+
+                    for p in range(len(pts)):
+                        font = cv2.FONT_HERSHEY_SIMPLEX
+                        org = (pts[p][0], pts[p][1])
+                        fontScale = 1
+                        color = 0
+                        thickness = 3
+                        thresh_img = cv2.putText(thresh_img, str(p), org, font,
+                                             fontScale, color, thickness, cv2.LINE_AA)
 
                     thresh_img = cv2.drawContours(thresh_img, [pts], -1, (0, 255, 0), 1, cv2.LINE_AA)
 

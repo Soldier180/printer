@@ -1,12 +1,9 @@
-#file:jsonsocket.py
-#https://github.com/mdebbar/jsonsocket
 import json, socket
 
 class Server(object):
   """
   A JSON socket server used to communicate with a JSON socket client. All the
   data is serialized in JSON. How to use it:
-
   server = Server(host, port)
   while True:
     server.accept()
@@ -57,7 +54,6 @@ class Client(object):
   """
   A JSON socket client used to communicate with a JSON socket server. All the
   data is serialized in JSON. How to use it:
-
   data = {
     'name': 'Patrick Jane',
     'age': 45,
@@ -101,6 +97,7 @@ class Client(object):
     if self.socket:
       self.socket.close()
       self.socket = None
+
 
 ## helper functions ##
 
