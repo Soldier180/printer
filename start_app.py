@@ -269,14 +269,14 @@ class ThreadStreamsCurrentValue(Thread, QtCore.QObject):
                     if rbox[1][0] >= rbox[1][1]:
                         ln_w = int(rbox[1][1] * 0.3)
 
-                        angle2 = math.pi - math.radians(int(180-rbox[2]))
+                        angle2 = np.pi - np.radians(int(180-rbox[2]))
 
                         x1, y1 = int(rbox[0][0]), int(rbox[0][1])
                         length = rbox[1][0] / 2
                         x1_0 = int(x1 + length * np.cos(angle2))
                         y1_0 = int(y1 + length * np.sin(angle2))
 
-                        angle1 = math.pi +angle2
+                        angle1 = np.pi +angle2
                         x2_0 = int(x1 + length * np.cos(angle1))
                         y2_0 = int(y1 + length * np.sin(angle1))
 
@@ -286,9 +286,9 @@ class ThreadStreamsCurrentValue(Thread, QtCore.QObject):
 
 
 
-                        print("w ",int(rbox[1][0]) ," h ", int(rbox[1][1]), "angle ", int(180-rbox[2]), "  ", angle2)
+                        #print("w ",int(rbox[1][0]) ," h ", int(rbox[1][1]), "angle ", int(180-rbox[2]), "  ", angle2)
                     else :#rbox[1][0] <rbox[1][1]:
-                        angle2= math.pi - math.radians(int(90 - rbox[2]))
+                        angle2= np.pi - np.radians(int(90 - rbox[2]))
                         ln_w = int(rbox[1][0] * 0.3)
                         x1, y1 = int(rbox[0][0]), int(rbox[0][1])
                         length = rbox[1][1] / 2
@@ -296,7 +296,7 @@ class ThreadStreamsCurrentValue(Thread, QtCore.QObject):
                         y1_0 = int(y1 + length * np.sin(angle2))
 
 
-                        angle1 = math.pi +angle2
+                        angle1 = np.pi +angle2
                         x2_0 = int(x1 + length * np.cos(angle1))
                         y2_0 = int(y1 + length * np.sin(angle1))
 
@@ -304,11 +304,7 @@ class ThreadStreamsCurrentValue(Thread, QtCore.QObject):
                         thresh_img = cv2.line(thresh_img, (x1_0, y1_0), (x2_0, y2_0), 255, ln_w)
                         image_copy = cv2.line(image_copy, (x1_0, y1_0), (x2_0, y2_0), 0, ln_w)
 
-
-
-
-
-                        print("w ",int(rbox[1][0]) ," h ", int(rbox[1][1]), "angle ",int(90-rbox[2]))
+                        #print("w ",int(rbox[1][0]) ," h ", int(rbox[1][1]), "angle ",int(90-rbox[2]))
 
 
 
@@ -346,7 +342,7 @@ class ThreadStreamsCurrentValue(Thread, QtCore.QObject):
                     font = cv2.FONT_HERSHEY_SIMPLEX
                     org = (int(rbox[0][0]), int(rbox[0][1]))
                     fontScale = 1
-                    color = (255,255,255)
+                    color = 255
                     thickness = 3
                     thresh_img = cv2.putText(thresh_img, "C", org, font,
                                              fontScale, color, thickness, cv2.LINE_AA)
