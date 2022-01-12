@@ -3,7 +3,7 @@ import cv2
 import zmq
 
 context = zmq.Context()
-footage_socket = context.socket(zmq.PUB)
+footage_socket = context.socket(zmq.PUSH)
 footage_socket.connect('tcp://172.16.234.76:5555')
 #
 # camera = cv2.VideoCapture(0, cv2.CAP_DSHOW)  # init the camera
@@ -162,9 +162,10 @@ while True:
 
 
         frame = cv2.resize(depth1, (640, 480))  # resize the frame
-        encoded, buffer = cv2.imencode('.jpg', frame)
-        jpg_as_text = base64.b64encode(buffer)
-        footage_socket.send(jpg_as_text)
+        footage_socket.send_pyobj(frame)
+        # encoded, buffer = cv2.imencode('.jpg', frame)
+        # jpg_as_text = base64.b64encode(buffer)
+        # footage_socket.send(jpg_as_text)
 
     except KeyboardInterrupt:
         rs.release()

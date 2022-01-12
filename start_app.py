@@ -49,6 +49,7 @@ class GUI(Ui_Form, QtWidgets.QWidget):
     pix_border_w = 10
     kernel = np.ones((dilate_kernel, dilate_kernel), 'uint8')
     work_zone = (config['work_zone'][0], config['work_zone'][1], config['work_zone'][2], config['work_zone'][3])
+    stream_frame = np.zeros((480, 640))
 
     def init_start_values(self):
         thresh_img = np.zeros((480,640 ))
@@ -74,8 +75,13 @@ class GUI(Ui_Form, QtWidgets.QWidget):
         self.sb_max_d.setValue(int(self.config['distance']['max'] * 1000))
         self.sb_min_d.setValue(int(self.config['distance']['min'] * 1000))
         self.th_rand = None
+        self.video_streamer_th = None
         self.pb_start.clicked.connect(self.start_b, type=connect_type)
         self.pb_stop.clicked.connect(self.stop_b, type=connect_type)
+
+        self.pb_start_video_stream.clicked.connect(self.start_stream, type=connect_type)
+        self.pb_stop_video_stream.clicked.connect(self.stop_stream, type=connect_type)
+
         self.rb_640_480.clicked.connect(self.change_resolution, type=connect_type)
         self.rb_1280_720.clicked.connect(self.change_resolution, type=connect_type)
         self.cb_dilate.stateChanged.connect(self.dilate_change, type=connect_type)
@@ -145,7 +151,8 @@ class GUI(Ui_Form, QtWidgets.QWidget):
             self.th_rand.kernel = np.ones((val, val), 'uint8')
 
 
-
+    def get_stream_frame(self):
+        return self.stream_frame
 
     def dilate_change(self):
         if self.cb_dilate.isChecked():
@@ -156,10 +163,23 @@ class GUI(Ui_Form, QtWidgets.QWidget):
         if self.th_rand is not None:
             self.th_rand.dilate_enable = dil_value
 
+    def start_stream(self):
+        if self.video_streamer_th is None:
+            self.video_streamer_th = ThreadStreamsVideo()
+            self.video_streamer_th.set_frame_get_method(self.get_stream_frame)
+            self.video_streamer_th.start()
+
+    def stop_stream(self):
+        if self.video_streamer_th is not None:
+            self.video_streamer_th.stop()
+            self.video_streamer_th = None
+
+
     def start_b(self):
         if self.th_rand is None:
             self.th_rand = ThreadStreamsCurrentValue(params=self.config)
             self.th_rand.value_change.connect(self.draw_frame)
+            self.th_rand.width_change.connect(self.change_width)
             self.th_rand.start()
 
     def stop_b(self):
@@ -168,9 +188,15 @@ class GUI(Ui_Form, QtWidgets.QWidget):
             self.th_rand = None
 
     def draw_frame(self, thresh_img):
+        self.stream_frame = thresh_img
         image = QtGui.QImage(thresh_img, thresh_img.shape[1], thresh_img.shape[0], QtGui.QImage.Format_Grayscale8)
         pixmap = QPixmap(image)
         self.lb_frames.setPixmap(pixmap)
+
+
+
+    def change_width(self, w):
+        self.lb_width.setText(str(int(w)))
 
     def closeEvent(self, event):
         if self.th_rand is not None:
@@ -182,11 +208,12 @@ class GUI(Ui_Form, QtWidgets.QWidget):
 
 class ThreadStreamsCurrentValue(Thread, QtCore.QObject):
     value_change = QtCore.pyqtSignal(object)
+    width_change = QtCore.pyqtSignal(float)
     def __init__(self, params, parent=None):
         Thread.__init__(self, parent)
         QtCore.QObject.__init__(self, parent)
         self._stop = Event()
-        self.kalman = KalmanFilter(initial_estimate = 50.0, initial_est_error = 1.0,initial_measure_error = 1.0)
+        self.kalman = KalmanFilter(initial_estimate = 50.0, initial_est_error =1,initial_measure_error = 1)
 
 
         self.pipeline = rs.pipeline()
@@ -330,45 +357,16 @@ class ThreadStreamsCurrentValue(Thread, QtCore.QObject):
 
                     delta_x_mm = delta_x * px_mm_x
                     delta_y_mm = delta_y * px_mm_y
-                    res = np.sqrt((delta_x_mm ** 2 + delta_y_mm ** 2))
-                    self.kalman.iterative_updates(res)
-
-                    print("width ", self.kalman.estimate)
-
+                    res_W = np.sqrt((delta_x_mm ** 2 + delta_y_mm ** 2))
+                    #print(res_W)
+                    self.kalman.iterative_updates(res_W)
 
 
 
 
 
 
-                    # w_i, h_i = abs(rbox[1][0]), abs(rbox[1][1])
-                    # w = np.max((w_i, h_i))
-                    # h = np.min((w_i, h_i))
-                    # # print((w,h))
-                    #
-                    # cv2.imshow('box', image_copy)
-                    # cv2.waitKey(1)
-                    #
-                    # A = np.argwhere(image_copy >= 255)
-                    # res = np.array([original_copy[v[0], v[1]] for v in A])
-                    # res[res <= 0.1] = np.nan
-                    # dist = np.nanmean(res)
-                    #
-                    # # pix_per_mm = w/(w_obj * dist)
-                    #
-                    # px_mm_x = (dist * 1000 * self.fov_x_2) / self.img_w_2
-                    # px_mm_y = (dist * 1000 * self.fov_y_2) / self.img_h_2
-                    # delta_x = pts[2][0] - pts[1][0]
-                    # delta_y = pts[2][1] - pts[1][1]
-                    #
-                    # delta_x_mm = delta_x * px_mm_x
-                    # delta_y_mm = delta_y * px_mm_y
-                    # #print(delta_x, delta_y)
-                    #
-                    # wwww = np.sqrt((delta_x_mm ** 2 + delta_y_mm ** 2))
-                    #print(wwww)
 
-                    # print(dist, " pix mm  ", pix_per_mm / dist, " x ", px_mm_x * w, " y ", px_mm_y * h)
                     # print("pix per mm x ",px_mm_x, " pix per mm y ", px_mm_y)
                     #print(dist, " x ", px_mm_x * w, " y ", px_mm_y * h)
 
@@ -400,10 +398,8 @@ class ThreadStreamsCurrentValue(Thread, QtCore.QObject):
                     thresh_img = cv2.drawContours(thresh_img, work_r_points,
                                                   -1, (0, 255, 0), 1, cv2.LINE_AA)
 
-
-
-
-
+                #print("width ", self.kalman.estimate)
+                self.width_change.emit(self.kalman.estimate)
                 self.value_change.emit(thresh_img)
             except Exception as e:
                 print(e)
@@ -411,6 +407,94 @@ class ThreadStreamsCurrentValue(Thread, QtCore.QObject):
                 continue
             if self.stopped():
                 return
+
+
+import cv2
+import socket
+import struct
+import math
+import copy
+class FrameSegment(object):
+    """
+    Object to break down image frame segment
+    if the size of image exceed maximum datagram size
+    """
+    MAX_DGRAM = 2**16
+    MAX_IMAGE_DGRAM = MAX_DGRAM - 64 # extract 64 bytes in case UDP frame overflown
+    def __init__(self, sock, port, addr="192.168.0.101"):
+        self.s = sock
+        self.port = port
+        self.addr = addr
+
+    def udp_frame(self, img):
+        """
+        Compress image and Break down
+        into data segments
+        """
+
+        compress_img = cv2.imencode('.jpg', img)[1]
+        dat = compress_img.tobytes()
+        size = len(dat)
+        count = math.ceil(size/(self.MAX_IMAGE_DGRAM))
+        array_pos_start = 0
+        while count:
+            array_pos_end = min(size, array_pos_start + self.MAX_IMAGE_DGRAM)
+            self.s.sendto(struct.pack("B", count) +
+                dat[array_pos_start:array_pos_end],
+                (self.addr, self.port)
+                )
+            array_pos_start = array_pos_end
+            count -= 1
+
+class ThreadStreamsVideo(Thread, QtCore.QObject):
+    value_change = QtCore.pyqtSignal(object)
+    width_change = QtCore.pyqtSignal(float)
+    def __init__(self, parent=None):
+        Thread.__init__(self, parent)
+        QtCore.QObject.__init__(self, parent)
+        self._stop = Event()
+        self.get_frame = None
+
+        self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+        self.fs = FrameSegment(self.s, 12345)
+
+    def set_frame_get_method(self, method):
+        self.get_frame = method
+
+
+
+    def stop(self):
+        self.s.close()
+        self._stop.set()
+        #footage_socket.disconnect('tcp://172.16.234.76:5555')
+
+
+
+    def stopped(self):
+        return self._stop.isSet()
+
+    def run(self):
+        while True:
+            if self.stopped():
+                return
+            try:
+                if self.get_frame is not None:
+                    frame = self.get_frame()
+                    # frame = cv2.resize(frame, (640, 480))  # resize the frame
+                    # encoded, buffer = cv2.imencode('.jpg', frame)
+                    # jpg_as_text = base64.b64encode(buffer)
+                    self.fs.udp_frame(frame)
+
+                    #self.footage_socket.send_pyobj(frame)
+
+            except Exception as e:
+                print(e)
+                #time.sleep(0.1)
+                continue
+
+
+
 
 
 if __name__ == "__main__":
