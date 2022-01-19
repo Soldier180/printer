@@ -56,6 +56,7 @@ class GUI(Ui_Form, QtWidgets.QWidget):
         image = QtGui.QImage(thresh_img, thresh_img.shape[1], thresh_img.shape[0], QtGui.QImage.Format_Grayscale8)
         pixmap = QPixmap(image)
         self.lb_frames.setPixmap(pixmap)
+        self.stream_frame= np.zeros((480, 640))
 
 
 
@@ -74,6 +75,9 @@ class GUI(Ui_Form, QtWidgets.QWidget):
             self.rb_1280_720.setChecked(True)
         self.sb_max_d.setValue(int(self.config['distance']['max'] * 1000))
         self.sb_min_d.setValue(int(self.config['distance']['min'] * 1000))
+        self.le_dest_stream_ip.setText(self.config["video_stream_config"]["ip"])
+        self.le_dest_stream_port.setText(str(self.config["video_stream_config"]["port"]))
+
         self.th_rand = None
         self.video_streamer_th = None
         self.pb_start.clicked.connect(self.start_b, type=connect_type)
@@ -164,10 +168,14 @@ class GUI(Ui_Form, QtWidgets.QWidget):
             self.th_rand.dilate_enable = dil_value
 
     def start_stream(self):
-        if self.video_streamer_th is None:
-            self.video_streamer_th = ThreadStreamsVideo()
-            self.video_streamer_th.set_frame_get_method(self.get_stream_frame)
-            self.video_streamer_th.start()
+        try:
+            if self.video_streamer_th is None:
+                self.video_streamer_th = ThreadStreamsVideo(ip=self.le_dest_stream_ip.text(), port=int(self.le_dest_stream_port.text()))
+                self.video_streamer_th.set_frame_get_method(self.get_stream_frame)
+                self.video_streamer_th.start()
+        except Exception as e:
+            print("start stream error")
+            print(e)
 
     def stop_stream(self):
         if self.video_streamer_th is not None:
@@ -177,15 +185,25 @@ class GUI(Ui_Form, QtWidgets.QWidget):
 
     def start_b(self):
         if self.th_rand is None:
-            self.th_rand = ThreadStreamsCurrentValue(params=self.config)
-            self.th_rand.value_change.connect(self.draw_frame)
-            self.th_rand.width_change.connect(self.change_width)
-            self.th_rand.start()
+            try:
+                self.th_rand = ThreadStreamsCurrentValue(params=self.config)
+                self.th_rand.value_change.connect(self.draw_frame)
+                self.th_rand.width_change.connect(self.change_width)
+                self.th_rand.start()
+                self.lb_status.setText("Connected")
+            except Exception as e:
+                self.lb_status.setText("Disconnected")
+                print(e)
 
     def stop_b(self):
-        if self.th_rand is not None:
-            self.th_rand.stop()
-            self.th_rand = None
+        try:
+            if self.th_rand is not None:
+                self.th_rand.stop()
+                self.th_rand = None
+                self.lb_status.setText("Disconnected")
+        except Exception as e:
+            self.lb_status.setText("Disconnected")
+            print(e)
 
     def draw_frame(self, thresh_img):
         self.stream_frame = thresh_img
@@ -449,15 +467,16 @@ class FrameSegment(object):
 class ThreadStreamsVideo(Thread, QtCore.QObject):
     value_change = QtCore.pyqtSignal(object)
     width_change = QtCore.pyqtSignal(float)
-    def __init__(self, parent=None):
+    def __init__(self, ip="", port=5555, parent=None):
         Thread.__init__(self, parent)
         QtCore.QObject.__init__(self, parent)
         self._stop = Event()
         self.get_frame = None
 
         self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        print(ip, port)
 
-        self.fs = FrameSegment(self.s, 12345)
+        self.fs = FrameSegment(self.s, addr=ip, port=port)
 
     def set_frame_get_method(self, method):
         self.get_frame = method
@@ -486,11 +505,9 @@ class ThreadStreamsVideo(Thread, QtCore.QObject):
                     # jpg_as_text = base64.b64encode(buffer)
                     self.fs.udp_frame(frame)
 
-                    #self.footage_socket.send_pyobj(frame)
 
             except Exception as e:
                 print(e)
-                #time.sleep(0.1)
                 continue
 
 

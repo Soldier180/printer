@@ -23,22 +23,28 @@ def main():
     
     # Set up socket
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.bind(('127.0.0.1', 12345))
+    s.bind(('172.16.234.76', 12345))
     dat = b''
     dump_buffer(s)
 
     while True:
-        seg, addr = s.recvfrom(MAX_DGRAM)
-        if struct.unpack("B", seg[0:1])[0] > 1:
-            dat += seg[1:]
-        else:
-            dat += seg[1:]
-            img = cv2.imdecode(np.frombuffer(dat, dtype=np.uint8), 1)
-            if img is not None:
-                cv2.imshow('frame', img)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-            dat = b''
+        try:
+            seg, addr = s.recvfrom(MAX_DGRAM)
+            if struct.unpack("B", seg[0:1])[0] > 1:
+                dat += seg[1:]
+            else:
+                dat += seg[1:]
+                img = cv2.imdecode(np.frombuffer(dat, dtype=np.uint8), 1)
+                if img is not None:
+                    cv2.imshow('frame', img)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+                dat = b''
+        except Exception as e:
+            break
+            cv2.destroyAllWindows()
+            s.close()
+
 
     # cap.release()
     cv2.destroyAllWindows()
