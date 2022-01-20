@@ -75,6 +75,7 @@ class GUI(Ui_Form, QtWidgets.QWidget):
             self.rb_1280_720.setChecked(True)
         self.sb_max_d.setValue(int(self.config['distance']['max'] * 1000))
         self.sb_min_d.setValue(int(self.config['distance']['min'] * 1000))
+        self.sb_depth_dead_zone.setValue(int(self.config['death_width_percent_zone'] * 100))
         self.le_dest_stream_ip.setText(self.config["video_stream_config"]["ip"])
         self.le_dest_stream_port.setText(str(self.config["video_stream_config"]["port"]))
 
@@ -92,6 +93,7 @@ class GUI(Ui_Form, QtWidgets.QWidget):
         self.sb_kernel.valueChanged.connect(self.kernel_change, type=connect_type)
         self.sb_max_d.valueChanged.connect(self.change_min_max_dist, type=connect_type)
         self.sb_min_d.valueChanged.connect(self.change_min_max_dist, type=connect_type)
+        self.sb_depth_dead_zone.valueChanged.connect(self.change_depth_ignore_ratio, type=connect_type)
         self.frame_label_position = self.lb_frames.pos()
 
     def mousePressEvent(self, event):
@@ -128,6 +130,13 @@ class GUI(Ui_Form, QtWidgets.QWidget):
         if self.th_rand is not None:
             self.th_rand.max_dist = max_d
             self.th_rand.min_dist = min_d
+
+    def change_depth_ignore_ratio(self):
+        ratio = self.sb_depth_dead_zone.value()/100
+        self.config['death_width_percent_zone'] = ratio
+        if self.th_rand is not None:
+            self.th_rand.death_width_zone = ratio
+
 
 
 
