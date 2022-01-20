@@ -50,6 +50,7 @@ class GUI(Ui_Form, QtWidgets.QWidget):
     kernel = np.ones((dilate_kernel, dilate_kernel), 'uint8')
     work_zone = (config['work_zone'][0], config['work_zone'][1], config['work_zone'][2], config['work_zone'][3])
     stream_frame = np.zeros((480, 640))
+    width_result = 0.0
 
     def init_start_values(self):
         thresh_img = np.zeros((480,640 ))
@@ -102,6 +103,13 @@ class GUI(Ui_Form, QtWidgets.QWidget):
 
         self.frame_label_position = self.lb_frames.pos()
 
+        self.server = Server(("localhost", 9999), MyTCPHandler, self.get_width_res)
+        self.server.start()
+
+    def get_width_res(self):
+        return self.width_result
+
+
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton and self.cb_work_region.isChecked():
             self.origin = QPoint(event.pos())
@@ -125,6 +133,8 @@ class GUI(Ui_Form, QtWidgets.QWidget):
                 self.config['work_zone'] = [self.work_zone[0], self.work_zone[1], self.work_zone[2], self.work_zone[3]]
                 if self.th_rand is not None:
                     self.th_rand.work_zone = self.work_zone
+                    self.th_rand.work_zone_area = (self.work_zone[3] - self.work_zone[1]) * (
+                                self.work_zone[2] - self.work_zone[0])
             self.rubberBand.hide()
 
 
@@ -239,12 +249,15 @@ class GUI(Ui_Form, QtWidgets.QWidget):
 
 
     def change_width(self, w):
+        self.width_result = w
         self.lb_width.setText(str(int(w)))
 
     def closeEvent(self, event):
         if self.th_rand is not None:
             self.th_rand.stop()
         json.dump(self.config, open('config.json', 'w'))
+
+        self.server.stop()
         print("event")
 
 
@@ -542,7 +555,37 @@ class ThreadStreamsVideo(Thread, QtCore.QObject):
                 print(e)
                 continue
 
+from socketserver import TCPServer, BaseRequestHandler
 
+class Server(TCPServer, Thread):
+    def __init__(self, server_address, handler, method, parent=None):
+        TCPServer.__init__(self, server_address, handler, bind_and_activate=True)
+        Thread.__init__(self, parent)
+        self._stop = Event()
+        self.get_method = method
+
+    def stop(self):
+        self._stop.set()
+        self.shutdown()
+
+    def stopped(self):
+        return self._stop.isSet()
+
+    def run(self):
+        self.serve_forever()
+
+class MyTCPHandler(BaseRequestHandler):
+    def handle(self):
+        # self.request - это TCP - сокет, подключённый к клиенту
+        #b'\x7e\xdd'
+        self.data = self.request.recv(1024)
+        print("{} wrote:".format(self.client_address[0]))
+        print(self.data)
+        v = self.server.get_method()
+
+        #v = rnd.get_random()
+        print("value", v)
+        self.request.sendall(bytearray(struct.pack("<f", v)))
 
 
 
