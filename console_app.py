@@ -12,7 +12,6 @@ from threading import Thread, Event
 import time
 import numpy as np
 import json
-from kalman import KalmanFilter
 from PyQt5.QtCore import pyqtSlot
 
 
