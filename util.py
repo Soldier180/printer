@@ -22,7 +22,7 @@ class ThreadProcessCurrentValue(Thread, QtCore.QObject):
         Thread.__init__(self, parent)
         QtCore.QObject.__init__(self, parent)
         self._stop = Event()
-        self.kalman = KalmanFilter(initial_estimate = 50.0, initial_est_error =1,initial_measure_error = 1)
+        self.kalman = KalmanFilter(initial_estimate = 50.0, initial_est_error =5,initial_measure_error = 3)
 
 
         self.pipeline = rs.pipeline()
@@ -53,6 +53,11 @@ class ThreadProcessCurrentValue(Thread, QtCore.QObject):
             self.fov_y_2 = np.tan(np.radians(658/ 2))
         self.img_w_2 = self.cam_w / 2
         self.img_h_2 = self.cam_h / 2
+        self.font = cv2.FONT_HERSHEY_SIMPLEX
+
+        self.fontScale = 1
+        self.color = 0
+        self.thickness = 3
 
 
     def stop(self):
@@ -194,15 +199,15 @@ class ThreadProcessCurrentValue(Thread, QtCore.QObject):
                         # thickness = 3
                         # thresh_img = cv2.putText(thresh_img, "C", org, font,
                         #                          fontScale, color, thickness, cv2.LINE_AA)
-
-                        for p in range(len(pts)):
-                            font = cv2.FONT_HERSHEY_SIMPLEX
-                            org = (pts[p][0], pts[p][1])
-                            fontScale = 1
-                            color = 0
-                            thickness = 3
-                            thresh_img = cv2.putText(thresh_img, str(p), org, font,
-                                                 fontScale, color, thickness, cv2.LINE_AA)
+                        #Draw points
+                        # for p in range(len(pts)):
+                        #     font = cv2.FONT_HERSHEY_SIMPLEX
+                        #     org = (pts[p][0], pts[p][1])
+                        #     fontScale = 1
+                        #     color = 0
+                        #     thickness = 3
+                        #     thresh_img = cv2.putText(thresh_img, str(p), org, font,
+                        #                          fontScale, color, thickness, cv2.LINE_AA)
 
                         thresh_img = cv2.drawContours(thresh_img, [pts], -1, (0, 255, 0), 1, cv2.LINE_AA)
 
@@ -213,11 +218,13 @@ class ThreadProcessCurrentValue(Thread, QtCore.QObject):
                           ))]
                 thresh_img = cv2.drawContours(thresh_img, work_r_points,
                                               -1, (0, 255, 0), 1, cv2.LINE_AA)
+                width = self.kalman.estimate
+                thresh_img = cv2.putText(thresh_img, str(np.round(width, 2)), (30,30), self.font, self.fontScale, self.color, self.thickness, cv2.LINE_AA)
 
                 #print("set frame", thresh_img.shape)
 
                 #print("width ", self.kalman.estimate)
-                self.width_change.emit(self.kalman.estimate)
+                self.width_change.emit(width)
                 self.value_change.emit(thresh_img)
             except Exception as e:
                 print(e)
