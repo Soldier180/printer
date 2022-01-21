@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 import socket
 import struct
+import json
 
 MAX_DGRAM = 2**16
 
@@ -16,14 +17,14 @@ def dump_buffer(s):
         if struct.unpack("B", seg[0:1])[0] == 1:
             print("finish emptying buffer")
             break
-
+config = json.load(open('config.json'))
 def main():
     """ Getting image udp frame &
     concate before decode and output image """
     
     # Set up socket
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.bind(('172.16.234.76', 12345))
+    s.bind((config["video_stream_config"]["ip"], int(config["video_stream_config"]["port"])))
     dat = b''
     dump_buffer(s)
 
@@ -36,7 +37,7 @@ def main():
                 dat += seg[1:]
                 img = cv2.imdecode(np.frombuffer(dat, dtype=np.uint8), 1)
                 if img is not None:
-                    cv2.imshow('frame', img)
+                    cv2.imshow('Q - Quit', img)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
                 dat = b''
