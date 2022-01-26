@@ -54,6 +54,7 @@ class ThreadProcessCurrentValue(Thread, QtCore.QObject):
         self.img_w_2 = self.cam_w / 2
         self.img_h_2 = self.cam_h / 2
         self.font = cv2.FONT_HERSHEY_SIMPLEX
+        self.res_W = 0
 
         self.fontScale = 1
         self.color = 0
@@ -178,9 +179,9 @@ class ThreadProcessCurrentValue(Thread, QtCore.QObject):
 
                         delta_x_mm = delta_x * px_mm_x
                         delta_y_mm = delta_y * px_mm_y
-                        res_W = np.sqrt((delta_x_mm ** 2 + delta_y_mm ** 2))
+                        self.res_W = np.sqrt((delta_x_mm ** 2 + delta_y_mm ** 2))
                         #print(res_W)
-                        self.kalman.iterative_updates(res_W)
+                        self.kalman.iterative_updates(self.res_W)
 
 
 
@@ -220,6 +221,9 @@ class ThreadProcessCurrentValue(Thread, QtCore.QObject):
                                               -1, (0, 255, 0), 1, cv2.LINE_AA)
                 width = self.kalman.estimate
                 thresh_img = cv2.putText(thresh_img, str(np.round(width, 2)), (30,30), self.font, self.fontScale, self.color, self.thickness, cv2.LINE_AA)
+
+                thresh_img = cv2.putText(thresh_img, "Real: " + str(np.round(self.res_W, 2)), (30, 70), self.font, self.fontScale,
+                                         self.color, self.thickness, cv2.LINE_AA)
 
                 #print("set frame", thresh_img.shape)
 
